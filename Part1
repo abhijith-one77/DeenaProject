@@ -1,154 +1,91 @@
 ```{r}
-############################################################
-# 1. Load packages
-############################################################
 library("DESeq2")
-library("gplots")
-library("RColorBrewer")
-library("ggplot2")
-library("pheatmap")
-
 ```
 
 ```{r}
-############################################################
-# 2. Read in data
-# - ExprMat.csv: counts (genes x samples)
-# - pDataMat.csv: sample info (samples x variables)
-# - FeatureMat.csv: gene annotation (genes x annotation cols)
-############################################################
-count.table <- read.csv("ExprMat.csv",
-                        row.names = 1,
-                        check.names = FALSE)
-
-pdat <- read.csv("pDataMat.csv",
-                 row.names = 1,
-                 check.names = FALSE)
-
-feat <- read.csv("FeatureMat.csv",
-                 row.names = 1,
-                 check.names = FALSE)
-
-# Look at first few lines
-cat("Counts matrix:\n"); head(count.table)
-cat("\nSample metadata:\n"); head(pdat)
-cat("\nFeature annotation:\n"); head(feat)
-
+load("CancerAndParacancer.RData")
 ```
 
 ```{r}
-############################################################
-# 3. CLEANING STEP (our idea)
-#    - align samples
-#    - remove low-count genes
-#    - remove duplicated genes
-#    - align annotation to expression
-############################################################
+expr <- ExprMat
+pdat <- pDataMat
+feat <- FeatureMat
+```
 
-# 3.1 align by sample ID
-common.samples <- intersect(colnames(count.table), rownames(pdat))
-count.table <- count.table[, common.samples, drop = FALSE]
-pdat <- pdat[common.samples, , drop = FALSE]
+```{r}
+head(expr)
+head(pdat)
+head(feat)
+```
 
-cat("After aligning samples:\n")
-cat("  counts:", nrow(count.table), "genes x", ncol(count.table), "samples\n")
-cat("  pData :", nrow(pdat), "samples x", ncol(pdat), "columns\n")
+```{r}
+same_samples <- intersect(colnames(expr), rownames(pdat))
 
-# 3.2 remove genes with very low total counts
-keep.expr <- rowSums(count.table) >= 10
-count.table <- count.table[keep.expr, , drop = FALSE]
+expr <- expr[, same_samples, drop = FALSE]
+pdat <- pdat[same_samples, , drop = FALSE]
 
-# 3.3 remove duplicated gene IDs
-count.table <- count.table[!duplicated(rownames(count.table)), , drop = FALSE]
+print("After aligning samples:")
+print(paste("expr:", nrow(expr), "genes x", ncol(expr), "samples"))
+print(paste("pdat:", nrow(pdat), "samples x", ncol(pdat), "columns"))
+```
 
-cat("After filtering genes:\n")
-cat("  counts:", nrow(count.table), "genes remain\n")
+```{r}
+keep.expr <- rowSums(expr) >= 10
+expr <- expr[keep.expr, , drop = FALSE]
+```
 
-# 3.4 clean feature/annotation table
+```{r}
+expr <- expr[!duplicated(rownames(expr)), , drop = FALSE]
+
+print("After filtering genes:")
+print(paste("expr:", nrow(expr), "genes remain"))
+```
+```{r}
 feat <- feat[!duplicated(rownames(feat)), , drop = FALSE]
-
-# keep only useful columns if present
-keep.cols <- intersect(c("gene_symbol", "symbol", "chromosome", "description", "gene_biotype"),
+keep.cols <- intersect(c("gene_symbol", "symbol", "chromosome", 
+                         "description", "gene_biotype"),
                        colnames(feat))
 feat <- feat[, keep.cols, drop = FALSE]
+feat <- feat[rownames(expr), , drop = FALSE]
 
-# align to expression rows
-feat <- feat[rownames(count.table), , drop = FALSE]
-
-cat("After aligning feature table:\n")
-cat("  features:", nrow(feat), "rows (should match genes)\n")
-
+print("After aligning featureMat table:")
+print(paste("features:", nrow(feat), "genes seen matching ExprMat"))
 ```
 
-```{r}
-colnames(pdat)
-head(pdat)
-table(pdat[,1])
-```
 
 ```{r}
-############################################################
-# 4. Define experimental condition (Group → condition)
-############################################################
-
-# Rename the column for clarity
 colnames(pdat)[1] <- "condition"
-
-# Convert to factor
 pdat$condition <- factor(pdat$condition)
-
-# Make "paracancerous" the reference (baseline/control)
 pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
 
-# Check balance
-table(pdat$condition)
+print("Condition distribution:")
+print(table(pdat$condition))
 
 ```
 
 ```{r}
-############################################################
-# 5. Create DESeq2 dataset
-############################################################
-dds <- DESeqDataSetFromMatrix(countData = count.table,
+dds <- DESeqDataSetFromMatrix(countData = expr,
                               colData   = pdat,
                               design    = ~ condition)
-
-dds
-
 ```
 
 ```{r}
-############################################################
-# 6. Run DESeq2
-############################################################
 dds <- DESeq(dds)
-
-# Extract results (cancer vs paracancerous)
 res <- results(dds)
-resOrdered <- res[order(res$padj), ]
-
-# Check top genes
-head(resOrdered)
-
-
+resOrdered <- res[order(res$padj, na.last = NA), ]
+print("Top DESeq2 results:")
+print(head(resOrdered))
 ```
 
 ```{r}
-############################################################
-# 7. Save DESeq2 results and normalized counts
-############################################################
-write.csv(as.data.frame(resOrdered),
-          file = "DESeq2_results_cancer_vs_paracancerous.csv")
-
-write.csv(as.data.frame(counts(dds, normalized = TRUE)),
-          file = "DESeq2_normalized_counts.csv")
-
-cat("✅ DESeq2 analysis complete. Results saved.\n")
+DESOrder <- as.data.frame(resOrdered)
+NormalDES <- as.data.frame(counts(dds, normalized = TRUE))
+View(DESOrder)
+View(NormalDES)
+``````
 
 
-```
-
-```{r}
+{r}
 # 8.1 Variance-stabilizing transformation
 vsd <- vst(dds, blind = FALSE)
 
