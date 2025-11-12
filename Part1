@@ -5,7 +5,7 @@ library("DESeq2")
 ```{r}
 url <- "https://raw.githubusercontent.com/abhijith-one77/DeenaProject/main/CancerAndParacancer.RData"
 download.file(url, destfile = "CancerAndParacancer.RData", mode = "wb")
-load("CancerAndParacancer.RData"
+load("CancerAndParacancer.RData")
 ```
 
 ```{r}
