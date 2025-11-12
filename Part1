@@ -19,7 +19,7 @@ head(expr)
 head(pdat)
 head(feat)
 ```
-
+#in expr sampleIds are found in colums and in pdat sampleids are found in rows ,it will be difficult to calculate if they are not in same format i.e both columns or both rows .so we are trying to change it that
 ```{r}
 same_samples <- intersect(colnames(expr), rownames(pdat))
 
@@ -31,6 +31,7 @@ print(paste("expr:", nrow(expr), "genes x", ncol(expr), "samples"))
 print(paste("pdat:", nrow(pdat), "samples x", ncol(pdat), "columns"))
 ```
 
+#we are trying to remove any rows in ExprMat data that is 
 ```{r}
 keep.expr <- rowSums(expr) >= 10
 expr <- expr[keep.expr, , drop = FALSE]
@@ -42,6 +43,8 @@ expr <- expr[!duplicated(rownames(expr)), , drop = FALSE]
 print("After filtering genes:")
 print(paste("expr:", nrow(expr), "genes remain"))
 ```
+
+
 ```{r}
 feat <- feat[!duplicated(rownames(feat)), , drop = FALSE]
 keep.cols <- intersect(c("gene_symbol", "symbol", "chromosome", 
@@ -82,7 +85,11 @@ print(head(resOrdered))
 ```{r}
 DESOrder <- as.data.frame(resOrdered)
 NormalDES <- as.data.frame(counts(dds, normalized = TRUE))
-View(DESOrder)
-View(NormalDES)
-``````
 
+print("Top DESeq2 results:")
+head(DESOrder)
+
+print("Normalized counts (first few rows):")
+head(NormalDES)
+
+```
