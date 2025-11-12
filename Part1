@@ -1,0 +1,293 @@
+```{r}
+############################################################
+# 1. Load packages
+############################################################
+library("DESeq2")
+library("gplots")
+library("RColorBrewer")
+library("ggplot2")
+library("pheatmap")
+
+```
+
+```{r}
+############################################################
+# 2. Read in data
+# - ExprMat.csv: counts (genes x samples)
+# - pDataMat.csv: sample info (samples x variables)
+# - FeatureMat.csv: gene annotation (genes x annotation cols)
+############################################################
+count.table <- read.csv("ExprMat.csv",
+                        row.names = 1,
+                        check.names = FALSE)
+
+pdat <- read.csv("pDataMat.csv",
+                 row.names = 1,
+                 check.names = FALSE)
+
+feat <- read.csv("FeatureMat.csv",
+                 row.names = 1,
+                 check.names = FALSE)
+
+# Look at first few lines
+cat("Counts matrix:\n"); head(count.table)
+cat("\nSample metadata:\n"); head(pdat)
+cat("\nFeature annotation:\n"); head(feat)
+
+```
+
+```{r}
+############################################################
+# 3. CLEANING STEP (our idea)
+#    - align samples
+#    - remove low-count genes
+#    - remove duplicated genes
+#    - align annotation to expression
+############################################################
+
+# 3.1 align by sample ID
+common.samples <- intersect(colnames(count.table), rownames(pdat))
+count.table <- count.table[, common.samples, drop = FALSE]
+pdat <- pdat[common.samples, , drop = FALSE]
+
+cat("After aligning samples:\n")
+cat("  counts:", nrow(count.table), "genes x", ncol(count.table), "samples\n")
+cat("  pData :", nrow(pdat), "samples x", ncol(pdat), "columns\n")
+
+# 3.2 remove genes with very low total counts
+keep.expr <- rowSums(count.table) >= 10
+count.table <- count.table[keep.expr, , drop = FALSE]
+
+# 3.3 remove duplicated gene IDs
+count.table <- count.table[!duplicated(rownames(count.table)), , drop = FALSE]
+
+cat("After filtering genes:\n")
+cat("  counts:", nrow(count.table), "genes remain\n")
+
+# 3.4 clean feature/annotation table
+feat <- feat[!duplicated(rownames(feat)), , drop = FALSE]
+
+# keep only useful columns if present
+keep.cols <- intersect(c("gene_symbol", "symbol", "chromosome", "description", "gene_biotype"),
+                       colnames(feat))
+feat <- feat[, keep.cols, drop = FALSE]
+
+# align to expression rows
+feat <- feat[rownames(count.table), , drop = FALSE]
+
+cat("After aligning feature table:\n")
+cat("  features:", nrow(feat), "rows (should match genes)\n")
+
+```
+
+```{r}
+colnames(pdat)
+head(pdat)
+table(pdat[,1])
+```
+
+```{r}
+############################################################
+# 4. Define experimental condition (Group → condition)
+############################################################
+
+# Rename the column for clarity
+colnames(pdat)[1] <- "condition"
+
+# Convert to factor
+pdat$condition <- factor(pdat$condition)
+
+# Make "paracancerous" the reference (baseline/control)
+pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
+
+# Check balance
+table(pdat$condition)
+
+```
+
+```{r}
+############################################################
+# 5. Create DESeq2 dataset
+############################################################
+dds <- DESeqDataSetFromMatrix(countData = count.table,
+                              colData   = pdat,
+                              design    = ~ condition)
+
+dds
+
+```
+
+```{r}
+############################################################
+# 6. Run DESeq2
+############################################################
+dds <- DESeq(dds)
+
+# Extract results (cancer vs paracancerous)
+res <- results(dds)
+resOrdered <- res[order(res$padj), ]
+
+# Check top genes
+head(resOrdered)
+
+
+```
+
+```{r}
+############################################################
+# 7. Save DESeq2 results and normalized counts
+############################################################
+write.csv(as.data.frame(resOrdered),
+          file = "DESeq2_results_cancer_vs_paracancerous.csv")
+
+write.csv(as.data.frame(counts(dds, normalized = TRUE)),
+          file = "DESeq2_normalized_counts.csv")
+
+cat("✅ DESeq2 analysis complete. Results saved.\n")
+
+
+```
+
+```{r}
+# 8.1 Variance-stabilizing transformation
+vsd <- vst(dds, blind = FALSE)
+
+############################################################
+# 8.2 PCA plot of samples
+############################################################
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(PC1, PC2, color = condition)) +
+  geom_point(size = 4, alpha = 0.8) +
+  labs(title = "PCA of RNA-seq samples",
+       x = paste0("PC1 (", percentVar[1], "% variance)"),
+       y = paste0("PC2 (", percentVar[2], "% variance)")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+############################################################
+# 8.3 Sample-to-sample distance heatmap
+############################################################
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- vsd$condition
+colnames(sampleDistMatrix) <- vsd$condition
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         col = colors,
+         main = "Sample-to-sample distances")
+
+############################################################
+# 8.4 Scatter plot of two genes (example)
+############################################################
+geneA <- "TP53"     # change to a gene in your dataset
+geneB <- "EGFR"     # change to a gene in your dataset
+norm_counts <- assay(vsd)
+
+if (geneA %in% rownames(norm_counts) && geneB %in% rownames(norm_counts)) {
+  df_scatter <- data.frame(
+    GeneA = norm_counts[geneA, ],
+    GeneB = norm_counts[geneB, ],
+    Condition = vsd$condition
+  )
+
+  ggplot(df_scatter, aes(GeneA, GeneB, color = Condition)) +
+    geom_point(size = 3, alpha = 0.8) +
+    labs(title = paste("Scatter of", geneA, "vs", geneB),
+         x = paste(geneA, "(vst counts)"),
+         y = paste(geneB, "(vst counts)")) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+} else {
+  cat("⚠️ One or both selected genes not found in the dataset.\n")
+}
+
+############################################################
+# 8.5 (Optional) Heatmap of top variable genes
+############################################################
+topVarGenes <- head(order(rowVars(assay(vsd)), decreasing = TRUE), 50)
+pheatmap(assay(vsd)[topVarGenes, ],
+         show_rownames = FALSE,
+         cluster_cols = TRUE,
+         annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
+         main = "Top 50 Most Variable Genes")
+
+```
+
+```{r}
+############################################################
+# 9. Volcano Plot (highlight significant genes)
+############################################################
+res_df <- as.data.frame(res)
+res_df$threshold <- as.factor(abs(res_df$log2FoldChange) > 1 & res_df$padj < 0.05)
+
+ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = threshold)) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  scale_color_manual(values = c("grey", "red")) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "blue") +
+  labs(title = "Volcano Plot: Cancer vs Paracancerous",
+       x = "Log2 Fold Change",
+       y = "-Log10 Adjusted p-value") +
+  theme_minimal()
+
+```
+
+```{r}
+############################################################
+# Annotate Top 15 DEGs with Symbol, Synonyms, Description, GeneType
+############################################################
+
+# --- Load and clean FeatureMat ---
+feat <- read.csv("FeatureMat.csv", row.names = 1, check.names = FALSE)
+feat$GeneID <- rownames(feat)
+
+# Keep relevant columns if present
+cols <- intersect(c("GeneID", "Symbol", "gene_symbol", "symbol",
+                    "Synonyms", "synonym", "gene_synonym",
+                    "Description", "description",
+                    "GeneType", "gene_type", "gene_biotype"), colnames(feat))
+feat <- feat[, cols, drop = FALSE]
+feat[] <- lapply(feat, as.character)
+
+# --- Extract top 15 DEGs ---
+top15 <- data.frame(
+  GeneID = rownames(resOrdered)[1:15],
+  log2FoldChange = resOrdered$log2FoldChange[1:15],
+  padj = resOrdered$padj[1:15],
+  stringsAsFactors = FALSE
+)
+
+# --- Merge DEGs with annotation ---
+annot_cols <- intersect(c("GeneID", "Symbol", "gene_symbol", "symbol",
+                          "Synonyms", "synonym", "gene_synonym",
+                          "Description", "description",
+                          "GeneType", "gene_type", "gene_biotype"), colnames(feat))
+
+top15_annotated <- merge(top15, feat[, annot_cols, drop = FALSE],
+                         by = "GeneID", all.x = TRUE)
+
+# --- Standardize column names ---
+colnames(top15_annotated) <- sub("gene_symbol|symbol", "Symbol", colnames(top15_annotated))
+colnames(top15_annotated) <- sub("synonym.*", "Synonyms", colnames(top15_annotated))
+colnames(top15_annotated) <- sub("description", "Description", colnames(top15_annotated))
+colnames(top15_annotated) <- sub("gene_type|gene_biotype", "GeneType", colnames(top15_annotated))
+
+# --- Arrange and save ---
+cols_final <- c("GeneID", "Symbol", "Synonyms", "Description", "GeneType",
+                "log2FoldChange", "padj")
+cols_final <- cols_final[cols_final %in% colnames(top15_annotated)]
+top15_annotated <- top15_annotated[, cols_final]
+top15_annotated <- top15_annotated[order(top15_annotated$padj), ]
+
+# --- Output ---
+cat("\n🧬 Top 15 Significant DEGs with Annotation:\n")
+print(top15_annotated)
+write.csv(top15_annotated, "Top15_DEGs_with_Annotation.csv", row.names = FALSE)
+cat("\n✅ Annotated gene list saved as 'Top15_DEGs_with_Annotation.csv'\n")
+
+```
