@@ -1,39 +1,98 @@
 ```{r}
+# use DESeq2 for gene expression comparison
 library(DESeq2)
+
+# bring in saved cancer study tables
 load("CancerAndParacancer.RData")
+
+# give shorter names to study tables
 expr <- ExprMat;pdat <- pDataMat;feat <- FeatureMat
+
+# find samples present in both tables
 same_samples <- intersect(colnames(expr), rownames(pdat))
+
+# keep only these samples in expression table
 expr <- expr[, same_samples, drop = F]
+
+# keep only these samples in patient table
 pdat <- pdat[same_samples, , drop = F]
-expr <- expr[rowSums(expr) >= 100, , drop = F]
+
+# remove genes with very few reads
+expr <- expr[rowSums(expr) >= 10, , drop = F]
+
+# remove repeated gene names in expression
 expr <- expr[!duplicated(rownames(expr)), , drop = F]
+
+# remove repeated gene names in features
 feat <- feat[!duplicated(rownames(feat)), , drop = F]
+
+# choose useful fields with gene info
 new_col <- intersect(c("gene_symbol", "symbol", "chromosome", "description", "gene_biotype"), colnames(feat))
+
+# keep only these info fields
 feat <- feat[, new_col, drop = F]
+
+# match feature rows to gene list
 feat <- feat[rownames(expr), , drop = F]
+
+# call first patient field condition
 colnames(pdat)[1] <- "condition"
+
+# treat condition as a group label
 pdat$condition <- factor(pdat$condition)
+
+# set paracancerous as the base group
 pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
+
+# prepare input for DESeq2 group comparison
 dds <- DESeqDataSetFromMatrix(countData = expr, colData = pdat, design = ~ condition)
+
+# run DESeq2 and collect result table
 dds <- DESeq(dds);res <- results(dds)
+
+# order genes by smallest adjusted p values
 res_ordered <- res[order(res$padj, na.last = NA), ]
+
+# turn ordered results into a simple table
 des_order <- as.data.frame(res_ordered)
+
+# get read counts adjusted for library size
 normal_des <- as.data.frame(counts(dds, normalized = T))
+
+# adding gene names into one field
 des_order$gene <- rownames(des_order)
+
+# display first rows of both tables
 head(des_order);head(normal_des)
 ```
 
-
 ```{r}
+# make a simple table from results
 top_res<- as.data.frame(res)
+
+# remove lines with missing adjusted values
 top_res <- subset(top_res, !is.na(padj))
+
+# find fifteen smallest adjusted values
 top_id <- head(order(top_res$padj), 15)
-top_genes <- rownames(top_res)[top_id]
-top_genes <- top_genes[top_genes %in% rownames(FeatureMat)]
+
+# pick gene names for these lines
+top_genes<- rownames(top_res)[top_id]
+
+# keep genes that also have feature rows
+top_genes <- top_genes[top_genes %in% rownames(feat)]
+
+# join gene names, features and test scores using cbind
 top15 <- cbind(
+  # write gene name into first field
   GeneID = top_genes,
-  FeatureMat[top_genes, , drop = F],
+  # adding extra information about each gene
+  feat[top_genes, , drop = F],
+  # adding log2FoldChange, pvalue, padj values for these genes
   top_res[top_genes, c("log2FoldChange", "pvalue", "padj"), drop = F]
 )
+
+# show short summary and full result table
 summary(top15);print(top15)
+
 ```
