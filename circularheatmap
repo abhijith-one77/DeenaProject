@@ -1,0 +1,136 @@
+```{r}
+library(circlize)
+
+## 1) Matrix for top 15 DEGs ---------------------------------------------
+
+# Gene IDs for the top 15 DEGs (keep order from top15_table)
+top15_genes <- rownames(top15_table)
+
+# VST expression matrix from DESeq2
+vsd_mat <- assay(vsd)
+
+# Keep only genes that exist in vsd_mat, preserving order
+top15_genes <- top15_genes[top15_genes %in% rownames(vsd_mat)]
+
+# Subset expression and order samples by condition
+sample_order <- order(colData(vsd)$condition)
+vsd_top <- vsd_mat[top15_genes, sample_order, drop = FALSE]
+
+# Z-score per gene (row)
+vsd_top_z <- t(scale(t(vsd_top)))
+
+
+## 2) Use gene symbols as labels where possible ---------------------------
+
+annot_top15 <- feat[top15_genes, , drop = FALSE]
+
+if ("gene_symbol" %in% colnames(annot_top15)) {
+  gene_labels <- annot_top15$gene_symbol
+} else if ("symbol" %in% colnames(annot_top15)) {
+  gene_labels <- annot_top15$symbol
+} else {
+  gene_labels <- top15_genes
+}
+
+# Replace missing symbols with original IDs
+missing_lab <- is.na(gene_labels) | gene_labels == ""
+gene_labels[missing_lab] <- top15_genes[missing_lab]
+
+
+## 3) Up- vs down-regulated in cancer -------------------------------------
+
+res_df <- as.data.frame(res)
+lfc_top15 <- res_df[top15_genes, "log2FoldChange"]
+
+# Keep only genes with non-NA and non-zero log2FC
+valid <- !is.na(lfc_top15) & lfc_top15 != 0
+vsd_top_z <- vsd_top_z[valid, , drop = FALSE]
+lfc_top15 <- lfc_top15[valid]
+gene_labels <- gene_labels[valid]
+
+# Set rownames of the matrix to the final gene labels
+rownames(vsd_top_z) <- gene_labels
+
+row_split <- factor(ifelse(lfc_top15 > 0, "up_in_cancer", "down_in_cancer"))
+row_split <- droplevels(row_split)
+
+
+## 4) Colour function based on actual data range --------------------------
+
+z_lim <- max(abs(range(vsd_top_z, finite = TRUE)))
+col_fun <- colorRamp2(
+  c(-z_lim, 0, z_lim),
+  c("blue", "white", "red")
+)
+
+
+## 5) Draw the circular heatmap -------------------------------------------
+
+circos.clear()
+
+circos.par(
+  cell.padding = c(0, 0, 0, 0),
+  start.degree = 90,
+  gap.degree   = 6
+)
+
+circos.heatmap(
+  mat           = vsd_top_z,
+  col           = col_fun,
+  split         = row_split,      # sectors: up_in_cancer vs down_in_cancer
+  rownames.side = "outside",
+  dend.side     = "inside"
+)
+
+
+## 6) Add an outer track labelling the two conditions ---------------------
+
+condition_ordered <- colData(vsd)$condition[sample_order]
+n_samples         <- length(condition_ordered)
+
+tab_cond    <- table(condition_ordered)
+group_names <- names(tab_cond)          # e.g. c("paracancerous", "cancer")
+n_group1    <- as.integer(tab_cond[1])
+n_group2    <- as.integer(tab_cond[2])
+
+circos.trackPlotRegion(
+  ylim         = c(0, 1),
+  bg.border    = NA,
+  track.height = 0.08,
+  panel.fun = function(x, y) {
+    if (CELL_META$sector.index == get.all.sector.index()[1]) {
+      xlim  <- CELL_META$xlim
+      ylim  <- CELL_META$ylim
+      y_mid <- mean(ylim)
+
+      # Fractions for midpoints of group1 and group2
+      frac_g1 <- (n_group1 / 2) / n_samples
+      frac_g2 <- (n_group1 + n_group2 / 2) / n_samples
+
+      x_g1 <- xlim[1] + frac_g1 * (xlim[2] - xlim[1])
+      x_g2 <- xlim[1] + frac_g2 * (xlim[2] - xlim[1])
+
+      circos.text(
+        x          = x_g1,
+        y          = y_mid,
+        labels     = group_names[1],
+        facing     = "bending.inside",
+        niceFacing = TRUE,
+        cex        = 0.6
+      )
+
+      circos.text(
+        x          = x_g2,
+        y          = y_mid,
+        labels     = group_names[2],
+        facing     = "bending.inside",
+        niceFacing = TRUE,
+        cex        = 0.6
+      )
+    }
+  }
+)
+
+circos.clear()
+
+```
