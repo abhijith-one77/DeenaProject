@@ -1,0 +1,39 @@
+```{r}
+library(DESeq2)
+load("CancerAndParacancer.RData")
+expr <- ExprMat;pdat <- pDataMat;feat <- FeatureMat
+same_samples <- intersect(colnames(expr), rownames(pdat))
+expr <- expr[, same_samples, drop = F]
+pdat <- pdat[same_samples, , drop = F]
+expr <- expr[rowSums(expr) >= 8375, , drop = F]
+expr <- expr[!duplicated(rownames(expr)), , drop = F]
+feat <- feat[!duplicated(rownames(feat)), , drop = F]
+new_col <- intersect(c("gene_symbol", "symbol", "chromosome", "description", "gene_biotype"), colnames(feat))
+feat <- feat[, new_col, drop = F]
+feat <- feat[rownames(expr), , drop = F]
+colnames(pdat)[1] <- "condition"
+pdat$condition <- factor(pdat$condition)
+pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
+dds <- DESeqDataSetFromMatrix(countData = expr, colData = pdat, design = ~ condition)
+dds <- DESeq(dds);res <- results(dds)
+res_ordered <- res[order(res$padj, na.last = NA), ]
+des_order <- as.data.frame(res_ordered)
+normal_des <- as.data.frame(counts(dds, normalized = T))
+des_order$gene <- rownames(des_order)
+head(des_order);head(normal_des)
+```
+
+
+```{r}
+top_res<- as.data.frame(res)
+top_res <- subset(top_res, !is.na(padj))
+top_id <- head(order(top_res$padj), 15)
+top_genes <- rownames(top_res)[top_id]
+top_genes <- top_genes[top_genes %in% rownames(FeatureMat)]
+top15 <- cbind(
+  GeneID = top_genes,
+  FeatureMat[top_genes, , drop = F],
+  top_res[top_genes, c("log2FoldChange", "pvalue", "padj"), drop = F]
+)
+summary(top15);print(top15)
+```
