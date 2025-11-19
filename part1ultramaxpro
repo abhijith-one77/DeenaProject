@@ -1,0 +1,74 @@
+```{r}
+
+# use DESeq2 and load study tables
+library(DESeq2);load("CancerAndParacancer.RData")
+
+# give shorter names to study tables
+expr <- ExprMat;pdat <- pDataMat;feat <- FeatureMat
+
+# find samples present in both tables
+same_samples <- intersect(colnames(expr), rownames(pdat))
+
+# keep only these samples in expr
+expr <- expr[, same_samples, drop = F]
+
+# keep only these samples in patient table
+pdat <- pdat[same_samples, , drop = F]
+
+# remove genes with very low reads
+expr <- expr[rowSums(expr) >= 100, , drop = F]
+
+# remove repeated gene names in expr 
+expr <- expr[!duplicated(rownames(expr)), , drop = F]
+
+# remove repeated gene names in feat
+feat <- feat[!duplicated(rownames(feat)), , drop = F]
+
+# choose useful fields with gene info
+new_col <- intersect(c("gene_symbol", "symbol", "chromosome", "description", "gene_biotype"), colnames(feat))
+
+# keep only these info feilds
+feat <- feat[, new_col, drop = F]
+
+# match feat rows to gene list
+feat <- feat[rownames(expr), , drop = F]
+
+# call first patient column condition
+colnames(pdat)[1] <- "condition"
+
+# treat condition as a group label
+pdat$condition <- factor(pdat$condition)
+
+# set paracancerous as the base group
+pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
+
+# prepare input for DESeq2 group comparison
+dds <- DESeqDataSetFromMatrix(countData = expr, colData = pdat, design = ~ condition)
+
+# run DESeq2 and colect result table
+dds <- DESeq(dds);res <- results(dds)
+
+# order genes by smallest adjusted p values
+res_ordered <- res[order(res$padj, na.last = NA), ]
+
+# turn ordered results into a simple table
+des_order <- as.data.frame(res_ordered)
+
+# get read counts adjusted for library size
+normal_des <- as.data.frame(counts(dds, normalized = T))
+
+# adding gene names into one field
+des_order$gene <- rownames(des_order)
+
+# pick gene names for 15 best padj
+top_genes <- rownames(des_order)[1:15]
+
+# keep genes that also have feature rows
+top_genes <- top_genes[top_genes %in% rownames(FeatureMat)]
+
+# join gene names, features and test scores
+top15 <- cbind(GeneID = top_genes,FeatureMat[top_genes, , drop = F],
+  des_order[top_genes, c("log2FoldChange","pvalue", "padj","stat","lfcSE","baseMean"), drop = F])
+
+# show short summary and full result table
+summary(top15);print(top15)
