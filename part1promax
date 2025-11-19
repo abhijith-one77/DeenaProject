@@ -80,8 +80,8 @@ top15 <- cbind(
   GeneID = top_genes,
   # adding extra information about each gene
   FeatureMat[top_genes, , drop = F],
-  # adding log2FoldChange, pvalue, padj for these genes
-  des_order[top_genes, c("log2FoldChange", "pvalue", "padj"), drop = F]
+  # adding log2FoldChange, pvalue, padj etc for these genes
+  des_order[top_genes, c("log2FoldChange","pvalue", "padj","stat","lfcSE","baseMean"), drop = F]
 )
 # show short summary and full result table
 summary(top15);print(top15)
