@@ -1,95 +1,34 @@
-```{r}
-library("DESeq2")
-```
-
-```{r}
-url <- "https://raw.githubusercontent.com/abhijith-one77/DeenaProject/main/CancerAndParacancer.RData"
-download.file(url, destfile = "CancerAndParacancer.RData", mode = "wb")
-load("CancerAndParacancer.RData")
-```
-
-```{r}
-expr <- ExprMat
-pdat <- pDataMat
-feat <- FeatureMat
-```
-
-```{r}
-head(expr)
-head(pdat)
-head(feat)
-```
-#in expr sampleIds are found in colums and in pdat sampleids are found in rows ,it will be difficult to calculate if they are not in same format i.e both columns or both rows .so we are trying to change it that
-```{r}
+library(DESeq2);load("CancerAndParacancer.RData")
+expr <- ExprMat;pdat <- pDataMat;feat <- FeatureMat
 same_samples <- intersect(colnames(expr), rownames(pdat))
-
-expr <- expr[, same_samples, drop = FALSE]
-pdat <- pdat[same_samples, , drop = FALSE]
-
-print("After aligning samples:")
-print(paste("expr:", nrow(expr), "genes x", ncol(expr), "samples"))
-print(paste("pdat:", nrow(pdat), "samples x", ncol(pdat), "columns"))
-```
-
-#we are trying to remove any rows in ExprMat data that is 
-```{r}
-keep.expr <- rowSums(expr) >= 10
-expr <- expr[keep.expr, , drop = FALSE]
-```
-
-```{r}
-expr <- expr[!duplicated(rownames(expr)), , drop = FALSE]
-
-print("After filtering genes:")
-print(paste("expr:", nrow(expr), "genes remain"))
-```
-
-
-```{r}
-feat <- feat[!duplicated(rownames(feat)), , drop = FALSE]
-keep.cols <- intersect(c("gene_symbol", "symbol", "chromosome", 
-                         "description", "gene_biotype"),
-                       colnames(feat))
-feat <- feat[, keep.cols, drop = FALSE]
-feat <- feat[rownames(expr), , drop = FALSE]
-
-print("After aligning featureMat table:")
-print(paste("features:", nrow(feat), "genes seen matching ExprMat"))
-```
-
-
-```{r}
+expr <- expr[, same_samples, drop = F]
+pdat <- pdat[same_samples, , drop = F]
+expr <- expr[rowSums(expr) >= 100, , drop = F]
+expr <- expr[!duplicated(rownames(expr)), , drop = F]
+feat <- feat[!duplicated(rownames(feat)), , drop = F]
 colnames(pdat)[1] <- "condition"
 pdat$condition <- factor(pdat$condition)
 pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
-
-print("Condition distribution:")
-print(table(pdat$condition))
-
-```
-
-```{r}
-dds <- DESeqDataSetFromMatrix(countData = expr,
-                              colData   = pdat,
-                              design    = ~ condition)
-```
-
-```{r}
-dds <- DESeq(dds)
-res <- results(dds)
-resOrdered <- res[order(res$padj, na.last = NA), ]
-print("Top DESeq2 results:")
-print(head(resOrdered))
-```
-
-```{r}
-DESOrder <- as.data.frame(resOrdered)
-NormalDES <- as.data.frame(counts(dds, normalized = TRUE))
-
-print("Top DESeq2 results:")
-head(DESOrder)
-
-print("Normalized counts (first few rows):")
-head(NormalDES)
-
-```
+table(pdat$condition)
+dds <- DESeqDataSetFromMatrix(countData = expr, colData = pdat, design = ~ condition)
+dds <- DESeq(dds);res <- results(dds)
+res_ordered <- res[order(res$padj, na.last = NA), ]
+des_order <- as.data.frame(res_ordered)
+normal_des <- as.data.frame(counts(dds, normalized = T))
+head(des_order, 15)
+top_genes <- rownames(des_order)[1:15]
+top <- cbind(GeneID = top_genes,FeatureMat[top_genes, , drop = F])
+knitr::kable(top)
+sig <- des_order[!is.na(des_order$padj) & des_order$padj < 0.1, ]
+sig_up <- sig[sig$log2FoldChange > 0, ]
+sig_up <- sig_up[order(sig_up$log2FoldChange, decreasing = T), ]
+up_id <- rownames(sig_up)[1:min(5, nrow(sig_up))]
+top_up <- cbind(GeneID = up_id,FeatureMat[up_id, , drop = F])
+up_num <- cbind(GeneID = up_id,des_order[up_id, , drop = F])
+knitr::kable(top_up);knitr::kable(up_num)
+sig_down <- sig[sig$log2FoldChange < 0, ]
+sig_down <- sig_down[order(sig_down$log2FoldChange, decreasing = F), ]
+down_id <- rownames(sig_down)[1:min(5, nrow(sig_down))]
+top_down <- cbind(GeneID = down_id,FeatureMat[down_id, , drop = F])
+down_num <- cbind(GeneID = down_id,des_order[down_id, , drop = F])
+knitr::kable(top_down);knitr::kable(down_num)
