@@ -20,15 +20,16 @@ feat <-FeatureMat#Features of genes
 ```{r}
 same_samples <-intersect(colnames(expr), rownames(pdat))#find common samples
 expr <- expr[ ,same_samples,drop= F]#filter expressed genes
-pdat <- pdat[same_samples, ,drop= F]#filter pateint data sample
+pdat <- pdat[same_samples, ,drop= F]#filter patient data sample
+#print(all(colnames(expr) == rownames(pdat))) #Debugging
 ```
 
 4.Filtering noise or unnecessary info
 
 ```{r}
 expr <- expr[rowSums(expr) >= 10, ,drop= F] #removes expr below 10
-expr <- expr[!duplicated(rownames(expr)), ,drop=F] #checks for duplicated samples
-feat <-feat[!duplicated(rownames(feat)), , drop=F] #checks for duplicated features
+expr <- expr[!duplicated(rownames(expr)), ,drop=F] #checks for duplicated genes
+feat <-feat[!duplicated(rownames(feat)), , drop=F] #checks for duplicated gene features
 ```
 
 5.prepare grouping for DEseq2 and using paracancerous as reference instead of cancer
@@ -90,4 +91,5 @@ top_d <-cbind(GeneID=down_id, feat[down_id, ,drop=F]) #corresponding value of fe
 knitr::kable(down_num)#;head(down_num) #knit table for html
 knitr::kable(top_d)#;head(top_d) #knit table for html
 ```
+
 
