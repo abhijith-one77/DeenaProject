@@ -31,13 +31,13 @@ expr <- expr[!duplicated(rownames(expr)), ,drop=F] #checks for duplicated sample
 feat <-feat[!duplicated(rownames(feat)), , drop=F] #checks for duplicated features
 ```
 
-5.prepare grouping for DEseq2 and putting paracancerous as reference instead of cancer
+5.prepare grouping for DEseq2 and using paracancerous as reference instead of cancer
 
 ```{r}
-pdat$Group <- factor(pdat$Group)
-#table(pdat)
-pdat$Group <-relevel(pdat$Group ,ref= "paracancerous")
-#table(pdat)
+pdat$Group <- factor(pdat$Group)#convert to factor
+#table(pdat)#for debugging
+pdat$Group <-relevel(pdat$Group ,ref= "paracancerous")#setting the reference level
+#table(pdat)#for debugging
 ```
 
 6.DeSeq2 analysis part;showed results for Debugging ;used \# as it is not necessary ATM
@@ -90,4 +90,3 @@ top_d <-cbind(GeneID=down_id, feat[down_id, ,drop=F]) #corresponding value of fe
 knitr::kable(down_num)#;head(down_num) #knit table for html
 knitr::kable(top_d)#;head(top_d) #knit table for html
 ```
-
