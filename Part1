@@ -23,12 +23,12 @@ sig <- des_order[!is.na(des_order$padj) & des_order$padj < 0.1, ]
 sig_up <- sig[sig$log2FoldChange > 0, ]
 sig_up <- sig_up[order(sig_up$log2FoldChange, decreasing = T), ]
 up_id <- rownames(sig_up)[1:min(5, nrow(sig_up))]
-top_up <- cbind(GeneID = up_id,FeatureMat[up_id, , drop = F])
 up_num <- cbind(GeneID = up_id,des_order[up_id, , drop = F])
-knitr::kable(top_up);knitr::kable(up_num)
+top_up <- cbind(GeneID = up_id,FeatureMat[up_id, , drop = F])
+knitr::kable(up_num);knitr::kable(top_up)
 sig_down <- sig[sig$log2FoldChange < 0, ]
 sig_down <- sig_down[order(sig_down$log2FoldChange, decreasing = F), ]
 down_id <- rownames(sig_down)[1:min(5, nrow(sig_down))]
-top_down <- cbind(GeneID = down_id,FeatureMat[down_id, , drop = F])
 down_num <- cbind(GeneID = down_id,des_order[down_id, , drop = F])
-knitr::kable(top_down);knitr::kable(down_num)
+top_down <- cbind(GeneID = down_id,FeatureMat[down_id, , drop = F])
+knitr::kable(down_num);knitr::kable(top_down)
