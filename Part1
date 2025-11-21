@@ -1,34 +1,34 @@
+```{r}
 library(DESeq2);load("CancerAndParacancer.RData")
-expr <- ExprMat;pdat <- pDataMat;feat <- FeatureMat
-same_samples <- intersect(colnames(expr), rownames(pdat))
-expr <- expr[, same_samples, drop = F]
-pdat <- pdat[same_samples, , drop = F]
-expr <- expr[rowSums(expr) >= 100, , drop = F]
-expr <- expr[!duplicated(rownames(expr)), , drop = F]
-feat <- feat[!duplicated(rownames(feat)), , drop = F]
-colnames(pdat)[1] <- "condition"
-pdat$condition <- factor(pdat$condition)
-pdat$condition <- relevel(pdat$condition, ref = "paracancerous")
-table(pdat$condition)
-dds <- DESeqDataSetFromMatrix(countData = expr, colData = pdat, design = ~ condition)
-dds <- DESeq(dds);res <- results(dds)
-res_ordered <- res[order(res$padj, na.last = NA), ]
-des_order <- as.data.frame(res_ordered)
-normal_des <- as.data.frame(counts(dds, normalized = T))
-head(des_order, 15)
-top_genes <- rownames(des_order)[1:15]
-top <- cbind(GeneID = top_genes,FeatureMat[top_genes, , drop = F])
+expr <-ExprMat;pdat <-pDataMat;feat <-FeatureMat
+same_samples <-intersect(colnames(expr), rownames(pdat))
+expr <- expr[ ,same_samples,drop= F]
+pdat <- pdat[same_samples, ,drop= F]
+expr <- expr[rowSums(expr) >= 10, ,drop= F]
+expr <- expr[!duplicated(rownames(expr)), ,drop=F]
+feat <-feat[!duplicated(rownames(feat)), , drop=F]
+pdat$Group <- factor(pdat$Group);table(pdat)
+pdat$Group <-relevel(pdat$Group,ref= "paracancerous");table(pdat)
+dds <- DESeqDataSetFromMatrix(countData =expr,colData = pdat, design =~ Group);head(dds)
+dds <- DESeq(dds);head(dds)
+res <- results(dds);head(res)
+res_ordered <-res[order(res$padj, na.last=NA),]
+des_order <-as.data.frame(res_ordered)
+head(des_order,15)
+top_g <- rownames(des_order)[1:15]
+top <-cbind(GeneID =top_g, feat[top_g, ,drop= F])
 knitr::kable(top)
-sig <- des_order[!is.na(des_order$padj) & des_order$padj < 0.1, ]
-sig_up <- sig[sig$log2FoldChange > 0, ]
-sig_up <- sig_up[order(sig_up$log2FoldChange, decreasing = T), ]
-up_id <- rownames(sig_up)[1:min(5, nrow(sig_up))]
-up_num <- cbind(GeneID = up_id,des_order[up_id, , drop = F])
-top_up <- cbind(GeneID = up_id,FeatureMat[up_id, , drop = F])
+sig <- des_order[des_order$padj < 0.1,]
+sig_up <-sig[sig$log2FoldChange >1,]
+sig_up <- sig_up[order(sig_up$log2FoldChange,decreasing = T),]
+up_id <- head(rownames(sig_up),5)
+up_num <-cbind(GeneID=up_id, des_order[up_id, ,drop=F])
+top_up <-cbind(GeneID=up_id, feat[up_id, ,drop=F])
 knitr::kable(up_num);knitr::kable(top_up)
-sig_down <- sig[sig$log2FoldChange < 0, ]
-sig_down <- sig_down[order(sig_down$log2FoldChange, decreasing = F), ]
-down_id <- rownames(sig_down)[1:min(5, nrow(sig_down))]
-down_num <- cbind(GeneID = down_id,des_order[down_id, , drop = F])
-top_down <- cbind(GeneID = down_id,FeatureMat[down_id, , drop = F])
-knitr::kable(down_num);knitr::kable(top_down)
+sig_down <-sig[sig$log2FoldChange < -1,]
+sig_down <- sig_down[order(sig_down$log2FoldChange,decreasing = F),]
+down_id <- head(rownames(sig_down),5)
+down_num <-cbind(GeneID=down_id, des_order[down_id, ,drop=F])
+top_d <-cbind(GeneID=down_id, feat[down_id, ,drop=F])                 
+knitr::kable(down_num);knitr::kable(top_d)
+```
